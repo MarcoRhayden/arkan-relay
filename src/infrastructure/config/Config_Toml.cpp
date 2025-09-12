@@ -51,6 +51,18 @@ void Config_Toml::write_default(const fs::path& path, Settings& s) {
   out << "dir = \""    << kDefaultLogsDir   << "\"\n";
   out << "app = \""    << kDefaultAppLog    << "\"\n";
   out << "socket = \"" << kDefaultSocketLog << "\"\n";
+
+  out << "\n[relay]\n";
+  out << "ioThreads = "  << s.relay.ioThreads   << "\n";
+  out << "recvBuffer = " << s.relay.recvBuffer  << "\n";
+  out << "sendBuffer = " << s.relay.sendBuffer  << "\n";
+  out << "maxSessions = "<< s.relay.maxSessions << "\n";
+  out << "framing = \""  << s.relay.framing     << "\"\n";
+
+  out << "\n[kore1]\n";
+  out << "host = \"" << s.kore1.host << "\"\n";
+  out << "port = "   << s.kore1.port << "\n";
+
   out.close();
 
   s.logsDir           = kDefaultLogsDir;
@@ -108,6 +120,22 @@ Settings Config_Toml::load_or_create(const std::string& configPath) {
     if (auto v = (*log)["app"].value<std::string>())    s.appLogFilename    = *v;
     if (auto v = (*log)["socket"].value<std::string>()) s.socketLogFilename = *v;
   }
+
+  // [relay]
+  if (auto r = tbl["relay"].as_table()) {
+    if (auto v = (*r)["ioThreads"].value<int64_t>())   s.relay.ioThreads   = static_cast<int>(*v);
+    if (auto v = (*r)["recvBuffer"].value<int64_t>())  s.relay.recvBuffer  = static_cast<std::size_t>(*v);
+    if (auto v = (*r)["sendBuffer"].value<int64_t>())  s.relay.sendBuffer  = static_cast<std::size_t>(*v);
+    if (auto v = (*r)["maxSessions"].value<int64_t>()) s.relay.maxSessions = static_cast<std::size_t>(*v);
+    if (auto v = (*r)["framing"].value<std::string>()) s.relay.framing     = *v;
+  }
+
+  // [kore1]
+  if (auto k = tbl["kore1"].as_table()) {
+    if (auto v = (*k)["host"].value<std::string>()) s.kore1.host = *v;
+    if (auto v = (*k)["port"].value<int64_t>())     s.kore1.port = static_cast<uint16_t>(*v);
+  }
+
   if (s.logsDir.empty())           s.logsDir           = kDefaultLogsDir;
   if (s.appLogFilename.empty())    s.appLogFilename    = kDefaultAppLog;
   if (s.socketLogFilename.empty()) s.socketLogFilename = kDefaultSocketLog;

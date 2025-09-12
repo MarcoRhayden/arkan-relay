@@ -1,5 +1,4 @@
 #pragma once
-
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -7,28 +6,34 @@
 
 namespace arkan::relay::domain {
 
-    struct Settings {
-        // relay ports (XKORE_PORTS)
-        std::vector<uint16_t> ports{6900, 6901, 6902};
+struct Settings {
+  std::vector<uint16_t> ports{6900, 6901, 6902};
+  bool showConsole{false};
+  bool saveLog{true};
+  bool saveSocketLog{true};
 
-        // Flags
-        bool showConsole{false};
-        bool saveLog{true};
-        bool saveSocketLog{true};
+  std::optional<std::string> fnSeedAddr;
+  std::optional<std::string> fnChecksumAddr;
+  std::optional<std::string> fnSendAddr;
+  std::optional<std::string> fnRecvAddr;
 
-        // Addresses
-        std::string fnSeedAddr; // ex: "0x12345678"
-        std::string fnChecksumAddr; // ex: "0x9ABCDEF0"
-        std::string fnSendAddr; // ex: "0x...."
-        std::string fnRecvAddr; // ex: "0x...."
+  std::string logsDir{"logs"};
+  std::string appLogFilename{"relay_app.log"};
+  std::string socketLogFilename{"relay_socket.log"};
+  std::string configPath{"arkan-relay.toml"};
 
-        // Logging
-        std::string logsDir;
-        std::string appLogFilename;
-        std::string socketLogFilename;
+  struct Relay {
+    int         ioThreads{2};
+    std::size_t recvBuffer{65536};
+    std::size_t sendBuffer{65536};
+    std::size_t maxSessions{512};
+    std::string framing{"none"}; // "none" | "rsk" (for future)
+  } relay;
 
-        // Configuration file name (TOML)
-        std::string configPath{"arkan-relay.toml"};
-    };
+  struct Kore1 {
+    std::string host{"127.0.0.1"};
+    uint16_t    port{2350}; // example local Kore1 port
+  } kore1;
+};
 
 } // namespace arkan::relay::domain
