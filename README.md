@@ -77,21 +77,28 @@ domain  ←  application  ←  infrastructure  ←  adapters
 ## ⚙️ Requirements
 
 ### Windows
-- **Visual Studio 2022** (Desktop C++) or **MSVC Build Tools**
+- **Visual Studio 2022** (Desktop development with C++) or **MSVC Build Tools**
 - **CMake** and (optional) **Ninja**
-- Recommended: **vcpkg**
+- Recommended: **vcpkg** (for dependency management)
 
-#### - vcpkg
-```bash
-# 1 - Get vcpkg
+#### Install vcpkg (Windows)
+```powershell
+# 1 - Clone vcpkg
 git clone https://github.com/microsoft/vcpkg
-./vcpkg/bootstrap-vcpkg.sh
 
-# 2 - build vcpkg
+# 2 - Build vcpkg
+cd vcpkg
 .\bootstrap-vcpkg.bat
 
-# 3 - install dependencies
-./vcpkg install boost-filesystem spdlog tomlplusplus
+# 3 - Add vcpkg to PATH
+# Replace <path-to-vcpkg> with the folder where you cloned it
+setx PATH "%PATH%;<path-to-vcpkg>"
+
+# ⚠️ Close and reopen your terminal for the new PATH to take effect
+
+# 4 Install dependencies (Manifest mode)
+# At the project root (where vcpkg.json is located), run:
+vcpkg install --triplet x86-windows
 ```
 
 ---
@@ -99,14 +106,10 @@ git clone https://github.com/microsoft/vcpkg
 ## 🛠️ Build
 
 ### Windows (PowerShell)
+
+#### Using the build script (recommended)
 ```powershell
 .\scripts\build.ps1 -Config Debug   # or Release
-```
-
-Manual build (alternative):
-```bash
-cmake -S . -B build -DCMAKE_PREFIX_PATH="$(brew --prefix)" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-cmake --build build --config Debug
 ```
 
 ---
