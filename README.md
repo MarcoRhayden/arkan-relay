@@ -81,16 +81,17 @@ domain  ←  application  ←  infrastructure  ←  adapters
 - **CMake** and (optional) **Ninja**
 - Recommended: **vcpkg**
 
-#### vcpkg (optional, all platforms)
+#### - vcpkg
 ```bash
+# 1 - Get vcpkg
 git clone https://github.com/microsoft/vcpkg
-./vcpkg/bootstrap-vcpkg.sh     # (Windows: .\vcpkg\bootstrap-vcpkg.bat)
+./vcpkg/bootstrap-vcpkg.sh
 
-# install dependencies
-./vcpkg/vcpkg install boost-filesystem spdlog tomlplusplus
+# 2 - build vcpkg
+.\bootstrap-vcpkg.bat
 
-# help the scripts auto-detect vcpkg
-export VCPKG_ROOT=/path/to/vcpkg     # PowerShell: $env:VCPKG_ROOT="C:\path\to\vcpkg"
+# 3 - install dependencies
+./vcpkg install boost-filesystem spdlog tomlplusplus
 ```
 
 ---

@@ -1,8 +1,11 @@
 {
-    "name": "arkan-relay",
-    "version": "0.1.0",
-    "dependencies": [
-        "spdlog",
-        "tomlplusplus"
-    ]
+  "name": "arkan-relay",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "spdlog",
+    "tomlplusplus",
+    "boost-filesystem",
+    "boost-system",
+    "boost-asio"
+  ]
 }
