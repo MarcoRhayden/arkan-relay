@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="docs/img/openkore.png" alt="OpenKore" height="60" />
+  <img src="docs/img/openkore.png" alt="OpenKore" height="150" />
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/img/arkansoftware.png" alt="Arkan Software" height="60" />
+  <img src="docs/img/arkansoftware.png" alt="Arkan Software" height="150" />
 </p>
 
 # Arkan Relay
