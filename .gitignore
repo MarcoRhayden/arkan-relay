@@ -7,3 +7,7 @@ CMakeCache.txt
 *.log
 *.pdb
 *.ipch
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
