@@ -1,0 +1,9 @@
+/build/
+/.cache/
+/.vs/
+CMakeFiles/
+CMakeCache.txt
+*.user
+*.log
+*.pdb
+*.ipch
