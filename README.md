@@ -14,7 +14,7 @@
 ## 🧱 Architecture (Clean Architecture)
 
 - **domain/**: pure models (e.g., `Settings`).
-- **application/**: ports (interfaces) and orchestration services (e.g., `IConfigProvider`, `ILogger`, `Bootstrap`).
+- **application/**: ports (interfaces) and orchestration services (e.g., `IConfigProvider`, `ILogger`).
 - **infrastructure/**: concrete implementations of the ports (TOML via toml++, filesystem via Boost.Filesystem, logging via spdlog).
 - **adapters/**: edges of the system (CLI).
 
@@ -40,8 +40,6 @@ domain  ←  application  ←  infrastructure  ←  adapters (CLI)
 │  │  ├─ ports/
 │  │  │  ├─ IConfigProvider.hpp
 │  │  │  └─ ILogger.hpp
-│  │  └─ services/
-│  │     └─ Bootstrap.hpp
 │  ├─ infrastructure/
 │  │  ├─ config/
 │  │  │  ├─ Config_Toml.hpp
@@ -54,7 +52,6 @@ domain  ←  application  ←  infrastructure  ←  adapters (CLI)
 │        └─ cli/
 │           └─ CliMain.cpp
 └─ tests/
-   ├─ test_bootstrap.cpp
    ├─ test_config.cpp
    └─ test_logger.cpp
 ```

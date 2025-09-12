@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.26)
 project(arkan_relay LANGUAGES CXX)
 
-# ------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Toolchain / flags
-# ------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -15,18 +15,15 @@ else()
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# ------------------------------------------------------------------------------
-# spdlog (CONFIG → fallback header-only p/ Homebrew)
-# ------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# spdlog (CONFIG → fallback header-only)
+# ---------------------------------------------------------------------------
 find_package(spdlog CONFIG QUIET)
 if(NOT spdlog_FOUND)
-  message(STATUS "spdlog: falling back to header-only include (Homebrew)")
+  message(STATUS "spdlog: falling back to header-only include (Homebrew/vcpkg)")
   find_path(SPDLOG_INCLUDE_DIR
     NAMES spdlog/spdlog.h
-    PATHS
-      $ENV{HOMEBREW_PREFIX}/include
-      /opt/homebrew/include
-      /usr/local/include
+    PATHS $ENV{HOMEBREW_PREFIX}/include /opt/homebrew/include /usr/local/include
   )
   if(NOT SPDLOG_INCLUDE_DIR)
     message(FATAL_ERROR "spdlog header not found. Install via Homebrew/vcpkg or set SPDLOG_INCLUDE_DIR.")
@@ -36,18 +33,15 @@ if(NOT spdlog_FOUND)
     INTERFACE_INCLUDE_DIRECTORIES "${SPDLOG_INCLUDE_DIR}")
 endif()
 
-# ------------------------------------------------------------------------------
-# toml++ (CONFIG → fallback header-only p/ Homebrew)
-# ------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# toml++ (CONFIG → fallback header-only)
+# ---------------------------------------------------------------------------
 find_package(tomlplusplus CONFIG QUIET)
 if(NOT tomlplusplus_FOUND)
-  message(STATUS "tomlplusplus: falling back to header-only include (Homebrew)")
+  message(STATUS "tomlplusplus: falling back to header-only include (Homebrew/vcpkg)")
   find_path(TOMLPP_INCLUDE_DIR
     NAMES toml++/toml.hpp
-    PATHS
-      /opt/homebrew/opt/tomlplusplus/include
-      /opt/homebrew/include
-      /usr/local/include
+    PATHS /opt/homebrew/opt/tomlplusplus/include /opt/homebrew/include /usr/local/include
   )
   if(NOT TOMLPP_INCLUDE_DIR)
     message(FATAL_ERROR "toml++ header not found. Install via Homebrew/vcpkg or set TOMLPP_INCLUDE_DIR.")
@@ -57,11 +51,10 @@ if(NOT tomlplusplus_FOUND)
     INTERFACE_INCLUDE_DIRECTORIES "${TOMLPP_INCLUDE_DIR}")
 endif()
 
-# ------------------------------------------------------------------------------
-# Boost (filesystem + system se disponível)
-# ------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Boost (filesystem + headers; system if defined)
+# ---------------------------------------------------------------------------
 find_package(Boost 1.70 CONFIG QUIET COMPONENTS filesystem)
-
 if(NOT Boost_FOUND OR NOT TARGET Boost::filesystem)
   message(STATUS "Boost config not fully found; falling back to FindBoost module")
   if(POLICY CMP0167)
@@ -71,6 +64,7 @@ if(NOT Boost_FOUND OR NOT TARGET Boost::filesystem)
   find_package(Boost REQUIRED COMPONENTS filesystem)
 endif()
 
+# Filesystem lib target
 if(TARGET Boost::filesystem)
   set(BOOST_FS_TARGET Boost::filesystem)
 else()
@@ -78,6 +72,7 @@ else()
   set(BOOST_FS_TARGET ${Boost_FILESYSTEM_LIBRARY})
 endif()
 
+# System lib target (optional; header-only OK ≥1.70)
 if(TARGET Boost::system)
   set(BOOST_SYS_TARGET Boost::system)
 else()
@@ -86,58 +81,96 @@ else()
   else()
     find_library(Boost_SYSTEM_LIBRARY
       NAMES boost_system
-      PATHS
-        $ENV{HOMEBREW_PREFIX}/lib
-        /opt/homebrew/lib
-        /usr/local/lib
+      PATHS $ENV{HOMEBREW_PREFIX}/lib /opt/homebrew/lib /usr/local/lib
     )
     if(Boost_SYSTEM_LIBRARY)
       set(BOOST_SYS_TARGET ${Boost_SYSTEM_LIBRARY})
     else()
-      message(STATUS "Boost.System não encontrado como lib. Prosseguindo sem link explícito (header-only em Boost >= 1.70).")
+      message(STATUS "Boost.System not found as lib; continuing without explicit link (header-only OK ≥1.70).")
       set(BOOST_SYS_TARGET "")
     endif()
   endif()
 endif()
 
-# ------------------------------------------------------------------------------
-# Camadas / Targets
-# ------------------------------------------------------------------------------
+# Boost headers pseudo-target
+set(BOOST_HDR_TARGET "")
+if(TARGET Boost::headers)
+  set(BOOST_HDR_TARGET Boost::headers)
+elseif(TARGET Boost::boost)
+  set(BOOST_HDR_TARGET Boost::boost)
+endif()
 
-# 1) domain — somente headers (INTERFACE)
+# Threads
+find_package(Threads QUIET)
+
+# ---------------------------------------------------------------------------
+# Layers / Targets
+# ---------------------------------------------------------------------------
 add_library(arkan_relay_domain INTERFACE)
 target_include_directories(arkan_relay_domain INTERFACE src)
 
-# 2) application — somente headers (ports + services)
 add_library(arkan_relay_application INTERFACE)
 target_include_directories(arkan_relay_application INTERFACE src)
 target_link_libraries(arkan_relay_application INTERFACE arkan_relay_domain)
 
-# 3) infrastructure — implementações (config/logging)
-add_library(arkan_relay_infrastructure STATIC
+set(INFRA_COMMON
+  # domain
+  src/domain/Settings.hpp
+
+  # application (service)
+  src/application/services/BridgeService.hpp
+  src/application/services/BridgeService.cpp
+
+  # application ports (headers only)
+  src/application/ports/IConfigProvider.hpp
+  src/application/ports/ILogger.hpp
+  src/application/ports/IHook.hpp
+  src/application/ports/IKoreLink.hpp
+  src/application/ports/IFrameCodec.hpp
+
+  # infrastructure - config/logging/link/codec
   src/infrastructure/config/Config_Toml.hpp
   src/infrastructure/config/Config_Toml.cpp
   src/infrastructure/logging/Logger_Spdlog.hpp
   src/infrastructure/logging/Logger_Spdlog.cpp
+  src/infrastructure/link/KoreLink_Asio.hpp
+  src/infrastructure/link/KoreLink_Asio.cpp
+  src/infrastructure/codec/FrameCodec_Noop.hpp
 )
+
+add_library(arkan_relay_infrastructure STATIC ${INFRA_COMMON})
 target_include_directories(arkan_relay_infrastructure PUBLIC src)
 target_link_libraries(arkan_relay_infrastructure
   PUBLIC  arkan_relay_application
-  PRIVATE ${BOOST_FS_TARGET} ${BOOST_SYS_TARGET}
+  PRIVATE ${BOOST_FS_TARGET} ${BOOST_SYS_TARGET} ${BOOST_HDR_TARGET}
           spdlog::spdlog tomlplusplus::tomlplusplus
+          Threads::Threads
 )
 
-# 4) adapters → inbound → CLI (composition root)
-add_executable(arkan_relay_cli
-  src/adapters/inbound/cli/CliMain.cpp   # <<< atenção: 'cli', não 'clis'
-)
-target_link_libraries(arkan_relay_cli PRIVATE arkan_relay_infrastructure)
+# Hook Win32
+if(WIN32)
+  target_sources(arkan_relay_infrastructure PRIVATE
+    src/infrastructure/hook/Hook_Win32.hpp
+    src/infrastructure/hook/Hook_Win32.cpp
+  )
+  target_link_libraries(arkan_relay_infrastructure PRIVATE ws2_32)
+  target_compile_definitions(arkan_relay_infrastructure PRIVATE _WIN32_WINNT=0x0601)
+endif()
 
+# DLL (composition root)
+if(WIN32)
+  add_library(arkan_relay SHARED
+    src/adapters/outbound/dll/DllMain.cpp
+  )
+  target_include_directories(arkan_relay PRIVATE src)
+  target_link_libraries(arkan_relay PRIVATE arkan_relay_infrastructure)
+  set_target_properties(arkan_relay PROPERTIES OUTPUT_NAME "ArkanRelay")
+endif()
 
-# ------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Tests (GoogleTest)
-# ------------------------------------------------------------------------------
-include(CTest)                               # habilita BUILD_TESTING
+# ---------------------------------------------------------------------------
+include(CTest)
 option(ARKAN_BUILD_TESTS "Build unit tests" ON)
 
 if(ARKAN_BUILD_TESTS AND BUILD_TESTING)
@@ -145,37 +178,31 @@ if(ARKAN_BUILD_TESTS AND BUILD_TESTING)
   FetchContent_Declare(googletest
     URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
   )
-  # Em MSVC, evita conflito de CRT:
   set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
   FetchContent_MakeAvailable(googletest)
 
   enable_testing()
-  include(GoogleTest)                        # <- ESSENCIAL para gtest_discover_tests
+  include(GoogleTest)
 
-  # --- tests/test_config.cpp
-  add_executable(arkan_relay_test_config tests/test_config.cpp)
+  # tests que não dependem de WinAPI (OK em mac/Linux/Win)
+  add_executable(arkan_relay_test_config  tests/test_config.cpp)
   target_link_libraries(arkan_relay_test_config PRIVATE
-    arkan_relay_infrastructure
-    GTest::gtest_main
-    ${BOOST_FS_TARGET} ${BOOST_SYS_TARGET}  
+    arkan_relay_infrastructure GTest::gtest_main
+    ${BOOST_FS_TARGET} ${BOOST_SYS_TARGET} ${BOOST_HDR_TARGET} Threads::Threads
   )
   gtest_discover_tests(arkan_relay_test_config)
 
-  # --- tests/test_logger.cpp
-  add_executable(arkan_relay_test_logger tests/test_logger.cpp)
+  add_executable(arkan_relay_test_logger  tests/test_logger.cpp)
   target_link_libraries(arkan_relay_test_logger PRIVATE
-    arkan_relay_infrastructure
-    GTest::gtest_main
-    ${BOOST_FS_TARGET} ${BOOST_SYS_TARGET}
+    arkan_relay_infrastructure GTest::gtest_main
+    ${BOOST_FS_TARGET} ${BOOST_SYS_TARGET} ${BOOST_HDR_TARGET} Threads::Threads
   )
   gtest_discover_tests(arkan_relay_test_logger)
 
-  # --- tests/test_bootstrap.cpp
-  add_executable(arkan_relay_test_bootstrap tests/test_bootstrap.cpp)
-  target_link_libraries(arkan_relay_test_bootstrap PRIVATE
-    arkan_relay_infrastructure
-    GTest::gtest_main
-    ${BOOST_FS_TARGET} ${BOOST_SYS_TARGET}
+  add_executable(arkan_relay_test_link    tests/test_link_asio.cpp)
+  target_link_libraries(arkan_relay_test_link PRIVATE
+    arkan_relay_infrastructure GTest::gtest_main
+    ${BOOST_FS_TARGET} ${BOOST_SYS_TARGET} ${BOOST_HDR_TARGET} Threads::Threads
   )
-  gtest_discover_tests(arkan_relay_test_bootstrap)
+  gtest_discover_tests(arkan_relay_test_link)
 endif()
