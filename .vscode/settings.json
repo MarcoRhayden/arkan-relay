@@ -69,4 +69,12 @@
         "csignal": "cpp",
         "future": "cpp"
     },
+    "cmake.configureSettings": {
+        "CMAKE_TOOLCHAIN_FILE": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+    },
+    "terminal.integrated.env.windows": {
+        "VCPKG_ROOT": "${workspaceFolder}/../vcpkg"
+    },
+    "cmake.configureOnOpen": false,
+    "cmake.configureOnEdit": false
 }

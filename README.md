@@ -78,7 +78,7 @@ domain  ←  application  ←  infrastructure  ←  adapters
 
 ### Windows
 - **Visual Studio 2022** (Desktop development with C++) or **MSVC Build Tools**
-- **CMake** and (optional) **Ninja**
+- **CMake**
 - Recommended: **vcpkg** (for dependency management)
 
 #### Install vcpkg (Windows)
@@ -94,11 +94,14 @@ cd vcpkg
 # Replace <path-to-vcpkg> with the folder where you cloned it
 setx PATH "%PATH%;<path-to-vcpkg>"
 
-# ⚠️ Close and reopen your terminal for the new PATH to take effect
+# 4 - Set VCPKG_ROOT (same folder as above)
+setx VCPKG_ROOT "<path-to-vcpkg>"
 
-# 4 Install dependencies (Manifest mode)
+# ⚠️ Close and reopen your terminal for the new PATH and VCPKG_ROOT to take effect
+
+# 5 - Install dependencies (Manifest mode)
 # At the project root (where vcpkg.json is located), run:
-vcpkg install --triplet x86-windows
+vcpkg install --triplet x86-windows --x-manifest-root=.
 ```
 
 ---
