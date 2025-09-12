@@ -8,7 +8,6 @@
 
 **Arkan Relay** is a modular C++20 relay that sits between the Ragnarok Online client and OpenKore, acting as a transparent bridge that intercepts, frames, and forwards game packets (TCP) to enable stable bot-side processing. The solution emphasizes Clean Architecture, with TOML-based configuration, spdlog-backed structured logging (file + rotation), and a GoogleTest/CTest suite. It is designed strictly for closed, lab-grade environments. This is not intended for use on third-party servers or in production contexts.
 
-
 > This repository is being developed for study in a closed environment.
 
 ## 🧱 Architecture (Clean Architecture)
@@ -16,63 +15,66 @@
 - **domain/**: pure models (e.g., `Settings`).
 - **application/**: ports (interfaces) and orchestration services (e.g., `IConfigProvider`, `ILogger`).
 - **infrastructure/**: concrete implementations of the ports (TOML via toml++, filesystem via Boost.Filesystem, logging via spdlog).
-- **adapters/**: edges of the system (CLI).
+- **adapters/**: edges of the system.
 
 Dependency direction (only inward):
 
 ```
-domain  ←  application  ←  infrastructure  ←  adapters (CLI)
+domain  ←  application  ←  infrastructure  ←  adapters
 ```
 
 ### Folder layout
 
 ```
 .
-├─ arkan-relay.toml                 # configuration file (default)
+.
+├─ arkan-relay.toml                 # default configuration (TOML)
 ├─ CMakeLists.txt
 ├─ scripts/
-│  ├─ build.sh / build.ps1          # build (macOS/Linux and Windows)
-│  └─ test.sh / test.ps1            # tests (macOS/Linux and Windows)
+│  ├─ build.sh / build.ps1          # build (macOS/Linux / Windows)
+│  └─ test.sh  / test.ps1           # run tests
 ├─ src/
 │  ├─ domain/
 │  │  └─ Settings.hpp
 │  ├─ application/
 │  │  ├─ ports/
 │  │  │  ├─ IConfigProvider.hpp
-│  │  │  └─ ILogger.hpp
+│  │  │  ├─ ILogger.hpp
+│  │  │  ├─ IHook.hpp
+│  │  │  ├─ IKoreLink.hpp
+│  │  │  └─ IFrameCodec.hpp         # keep as extension point (noop impl in infra)
+│  │  └─ services/
+│  │     ├─ BridgeService.hpp
+│  │     └─ BridgeService.cpp
 │  ├─ infrastructure/
 │  │  ├─ config/
 │  │  │  ├─ Config_Toml.hpp
 │  │  │  └─ Config_Toml.cpp
-│  │  └─ logging/
-│  │     ├─ Logger_Spdlog.hpp
-│  │     └─ Logger_Spdlog.cpp
+│  │  ├─ logging/
+│  │  │  ├─ Logger_Spdlog.hpp
+│  │  │  └─ Logger_Spdlog.cpp
+│  │  ├─ link/
+│  │  │  ├─ KoreLink_Asio.hpp
+│  │  │  └─ KoreLink_Asio.cpp
+│  │  ├─ hook/
+│  │  │  ├─ Hook_Win32.hpp          
+│  │  │  └─ Hook_Win32.cpp
+│  │  └─ codec/
+│  │     └─ FrameCodec_Noop.hpp     # passthrough framing (placeholder)
 │  └─ adapters/
-│     └─ inbound/
-│        └─ cli/
-│           └─ CliMain.cpp
+│     └─ outbound/
+│        └─ dll/
+│           └─ DllMain.cpp          # DLL entrypoint (composition root)
 └─ tests/
    ├─ test_config.cpp
-   └─ test_logger.cpp
+   ├─ test_logger.cpp
+   ├─ test_link_asio.cpp
+   └─ test_bridge_integration.cpp
 ```
 
 ---
 
 ## ⚙️ Requirements
-
-### macOS (Homebrew)
-```bash
-brew install cmake ninja boost spdlog tomlplusplus
-```
-
-### Linux (Ubuntu/Debian)
-```bash
-sudo apt update
-sudo apt install -y build-essential cmake ninja-build
-# packages (if available on your distro)
-sudo apt install -y libboost-all-dev libspdlog-dev
-# toml++ may vary by distro; if missing, use vcpkg (below)
-```
 
 ### Windows
 - **Visual Studio 2022** (Desktop C++) or **MSVC Build Tools**
@@ -91,19 +93,9 @@ git clone https://github.com/microsoft/vcpkg
 export VCPKG_ROOT=/path/to/vcpkg     # PowerShell: $env:VCPKG_ROOT="C:\path\to\vcpkg"
 ```
 
-> The project also auto-detects **Homebrew** on macOS through `CMAKE_PREFIX_PATH`.
-
 ---
 
 ## 🛠️ Build
-
-Use the cross-platform scripts:
-
-### macOS / Linux
-```bash
-chmod +x scripts/build.sh scripts/test.sh
-./scripts/build.sh Debug     # or Release
-```
 
 ### Windows (PowerShell)
 ```powershell
@@ -123,9 +115,6 @@ cmake --build build --config Debug
 Run the tests (GoogleTest via CTest):
 
 ```bash
-# macOS/Linux
-./scripts/test.sh Debug
-
 # Windows (PowerShell)
 .\scripts\test.ps1 -Config Debug
 ```
