@@ -34,7 +34,7 @@
 ```mermaid
 flowchart LR
   subgraph Adapters
-    DLL[DLL Entry (DllMain)]
+    DLL["DLL Entry - DllMain"]
   end
 
   subgraph Infrastructure
