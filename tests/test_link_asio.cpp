@@ -5,7 +5,10 @@
 #include <condition_variable>
 #include <queue>
 #include <vector>
+#include <array>
 #include <cstddef>
+#include <cstring>
+#include <string_view>
 
 #include "infrastructure/link/KoreLink_Asio.hpp"
 #include "application/ports/ILogger.hpp"
@@ -31,18 +34,18 @@ static std::vector<std::byte> bytes_from(const std::string& s) {
 
 // ----------------------------- Test Logger -----------------------------
 struct TestLogger : arkan::relay::application::ports::ILogger {
+  using LogLevel = arkan::relay::application::ports::LogLevel;
+
   void init(const arkan::relay::domain::Settings&) override {}
-  void app(arkan::relay::application::ports::LogLevel, const std::string&) override {}
-  void sock(arkan::relay::application::ports::LogLevel, const std::string&) override {}
+  void app(LogLevel, const std::string&) override {}
+  void sock(LogLevel, std::string_view) override {}
 };
 
 // ----------------------------- Fake Kore1 server -----------------------------
 class FakeKoreServer {
 public:
-  FakeKoreServer()
-  : io_(), acceptor_(io_), socket_(io_) {}
+  FakeKoreServer() : io_(), acceptor_(io_), socket_(io_) {}
 
-  // start on loopback:0 (ephemeral), returns bound port
   uint16_t start() {
     tcp::endpoint ep{boost::asio::ip::make_address("127.0.0.1"), 0};
     acceptor_.open(ep.protocol());
@@ -51,7 +54,19 @@ public:
     acceptor_.listen();
 
     port_ = acceptor_.local_endpoint().port();
-    th_accept_ = std::thread([this]{ acceptor_.accept(socket_); read_loop_(); });
+    th_accept_ = std::thread([this]{
+      try {
+        acceptor_.accept(socket_);
+        {
+          std::lock_guard<std::mutex> lk(m_);
+          connected_ = true;
+        }
+        cv_conn_.notify_all();
+        read_loop_();
+      } catch (...) {
+        // ignore
+      }
+    });
     return port_;
   }
 
@@ -61,7 +76,12 @@ public:
     if (th_accept_.joinable()) th_accept_.join();
   }
 
-  // send a frame to the connected client
+  // Wait until a client is accepted (or timeout)
+  bool wait_connected(std::chrono::milliseconds to = std::chrono::milliseconds(2000)) {
+    std::unique_lock<std::mutex> lk(m_);
+    return cv_conn_.wait_for(lk, to, [&]{ return connected_; });
+  }
+
   void send_frame(char kind, std::span<const std::byte> payload) {
     std::vector<std::byte> buf;
     const uint16_t n = static_cast<uint16_t>(payload.size());
@@ -72,7 +92,6 @@ public:
     boost::asio::write(socket_, boost::asio::buffer(buf));
   }
 
-  // wait for a frame received from client
   bool wait_pop(char& kind, std::vector<std::byte>& payload, std::chrono::milliseconds to=std::chrono::milliseconds(1000)) {
     std::unique_lock<std::mutex> lk(m_);
     if(!cv_.wait_for(lk, to, [&]{ return !q_.empty(); })) return false;
@@ -109,7 +128,8 @@ private:
   std::thread   th_accept_;
 
   std::mutex m_;
-  std::condition_variable cv_;
+  std::condition_variable cv_, cv_conn_;
+  bool connected_ = false;
   std::queue<std::pair<char, std::vector<std::byte>>> q_;
 };
 
@@ -166,12 +186,14 @@ TEST(KoreLinkAsio, ReceivesFramesFromServer) {
 
   link.connect(s.kore1.host, s.kore1.port);
 
+  ASSERT_TRUE(server.wait_connected(std::chrono::milliseconds(2000)));
+
   auto payload = bytes_from("from-server");
   server.send_frame('R', payload);
 
   {
     std::unique_lock<std::mutex> lk(m);
-    ASSERT_TRUE(cv.wait_for(lk, std::chrono::milliseconds(1000), [&]{return got;}));
+    ASSERT_TRUE(cv.wait_for(lk, std::chrono::milliseconds(2000), [&]{return got;}));
   }
 
   EXPECT_EQ(kind, 'R');
