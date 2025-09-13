@@ -54,7 +54,12 @@ flowchart LR
     SETTINGS[Settings]
   end
 
-  DLL --> CFG & LOG & LINK & HOOK & CODEC
+  DLL --> CFG
+  DLL --> LOG
+  DLL --> LINK
+  DLL --> HOOK
+  DLL --> CODEC
+
   CFG --> SETTINGS
   LOG --> PORTS
   LINK --> PORTS
