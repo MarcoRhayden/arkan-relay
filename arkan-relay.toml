@@ -1,5 +1,5 @@
 [general]
-showConsole   = false
+showConsole   = true
 saveLog       = true
 saveSocketLog = true
 
