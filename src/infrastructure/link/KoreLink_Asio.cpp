@@ -112,16 +112,14 @@ namespace arkan::relay::infrastructure::link {
     if (!sock_ || !sock_->is_open()) return;
 
     const uint16_t n = static_cast<uint16_t>(payload.size());
+    auto buf = std::make_shared<std::vector<std::byte>>(1 + 2 + n);
 
-    // Assemble [kind][lenLE][payload]
-    std::vector<std::byte> buf;
-    buf.resize(1 + 2 + n);
-    buf[0] = static_cast<std::byte>(kind);
-    put_u16_le(buf.data() + 1, n);
-    if (n) std::memcpy(buf.data() + 3, payload.data(), n);
+    (*buf)[0] = static_cast<std::byte>(kind);
+    put_u16_le(buf->data() + 1, n);
+    if (n) std::memcpy(buf->data() + 3, payload.data(), n);
 
-    boost::asio::async_write(*sock_, boost::asio::buffer(buf),
-      [this](const boost::system::error_code& ec, std::size_t){
+    boost::asio::async_write(*sock_, boost::asio::buffer(*buf),
+      [this, buf](const boost::system::error_code& ec, std::size_t) {
         if (ec) log_.app(LogLevel::err, "KoreLink write error: " + ec.message());
       });
   }
