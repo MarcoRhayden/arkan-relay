@@ -6,6 +6,7 @@
     "tomlplusplus",
     "boost-filesystem",
     "boost-system",
-    "boost-asio"
+    "boost-asio",
+    "gtest"
   ]
 }
