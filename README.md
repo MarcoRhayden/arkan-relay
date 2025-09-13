@@ -1,106 +1,135 @@
+
 <p align="center">
-  <img src="docs/img/openkore.png" alt="OpenKore" height="150" />
+  <img src="docs/img/openkore.png" alt="OpenKore" height="120" />
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/img/arkansoftware.png" alt="Arkan Software" height="150" />
+  <img src="docs/img/arkansoftware.png" alt="Arkan Software" height="120" />
 </p>
 
-# Arkan Relay
+<h1 align="center">Arkan Relay</h1>
 
-**Arkan Relay** is a modular C++20 relay that sits between the Ragnarok Online client and OpenKore, acting as a transparent bridge that intercepts, frames, and forwards game packets (TCP) to enable stable bot-side processing. The solution emphasizes Clean Architecture, with TOML-based configuration, spdlog-backed structured logging (file + rotation), and a GoogleTest/CTest suite. It is designed strictly for closed, lab-grade environments. This is not intended for use on third-party servers or in production contexts.
+<p align="center">
+  <em>Modular C++20 relay that bridges the Ragnarok Online client and OpenKore for packet observation and controlled forwarding — built with Clean Architecture.</em><br/>
+  <strong>For research in a closed/lab environment only.</strong>
+</p>
 
-> This repository is being developed for study in a closed environment.
+---
 
-## 🧱 Architecture (Clean Architecture)
+## ✨ Overview
 
-- **domain/**: pure models (e.g., `Settings`).
-- **application/**: ports (interfaces) and orchestration services (e.g., `IConfigProvider`, `ILogger`).
-- **infrastructure/**: concrete implementations of the ports (TOML via toml++, filesystem via Boost.Filesystem, logging via spdlog).
-- **adapters/**: edges of the system.
+**Arkan Relay** runs as a Windows DLL that, once loaded into the Ragnarok Online (RO) client process, hooks the client’s `send`/`recv` functions to observe and (optionally) adjust packets. Frames are forwarded over TCP to a companion component (OpenKore side) using a minimal `R/S/K` envelope. It ships with:
 
-Dependency direction (only inward):
+- **Clean Architecture** (domain / application / infrastructure / adapters)
+- **Config** via TOML (toml++)
+- **Logging** via spdlog (file rotation + console + DebugView), with **colored console output**
+- **Networking** via Boost.Asio
+- **Unit tests** via GoogleTest/CTest
+- **Windows-only hook** that patches function pointers safely using `VirtualProtect`
+
+> ⚠️ This is a **research/educational** project. Do not use on third‑party servers or in production environments.
+
+---
+
+## 🧱 Architecture
+
+```mermaid
+flowchart LR
+  subgraph Adapters
+    DLL[DLL Entry (DllMain)]
+  end
+
+  subgraph Infrastructure
+    CFG[Config_Toml]
+    LOG[Logger_Spdlog]
+    LINK[KoreLink_Asio]
+    HOOK[Hook_Win32]
+    CODEC[FrameCodec_Noop]
+  end
+
+  subgraph Application
+    PORTS[Ports: ILogger, IHook, IKoreLink, IFrameCodec]
+    BRIDGE[BridgeService]
+  end
+
+  subgraph Domain
+    SETTINGS[Settings]
+  end
+
+  DLL --> CFG & LOG & LINK & HOOK & CODEC
+  CFG --> SETTINGS
+  LOG --> PORTS
+  LINK --> PORTS
+  HOOK --> PORTS
+  CODEC --> PORTS
+  PORTS --> BRIDGE
+  BRIDGE --> LINK
+  BRIDGE --> HOOK
+```
+
+**Dependency rule (inward only):** `domain ← application ← infrastructure ← adapters`.
+
+---
+
+## 🔧 How it works (Windows hook)
+
+1. **DllMain** (process attach) starts a worker thread and opens an optional console.
+2. The worker loads `arkan-relay.toml`, creates **Logger_Spdlog**, **KoreLink_Asio**, **FrameCodec_Noop**, and **Hook_Win32**.
+3. **BridgeService** wires callbacks between the hook and the link.
+4. **Hook_Win32::install()**:
+   - Converts hex strings in `[advanced]` to absolute addresses inside the RO client process.
+   - Uses `VirtualProtect` to flip slot memory to `PAGE_READWRITE`, **patches** the function-pointer slots for `send`/`recv` to point to our trampolines, then restores protection.
+   - Stores the original function pointers to call-through and to restore on uninstall.
+5. **Trampolines (hooked_send / hooked_recv)**:
+   - Track a small state machine (e.g., special packets `0x1C 0x0B`, resets `0x26 0x0C`), optionally recomputing a trailing checksum byte via two exported functions (`seed`, `checksum`) whose addresses are also provided in config.
+   - Emit **socket logs** and deliver byte spans to **BridgeService**, which frames and sends them to Kore.
+6. On unload, the DLL signals the worker to stop; **BridgeService** shuts down, and the hook restores original pointers.
+
+> The checksum/seed logic is implemented to mirror observed RO flows in a minimal, **non-invasive** way. All adjustments are gated by explicit state to avoid touching unrelated traffic.
+
+---
+
+## 📁 Layout
 
 ```
-domain  ←  application  ←  infrastructure  ←  adapters
-```
-
-### Folder layout
-
-```
-.
-.
-├─ arkan-relay.toml                 # default configuration (TOML)
-├─ CMakeLists.txt
-├─ scripts/
-│  ├─ build.sh / build.ps1          # build (macOS/Linux / Windows)
-│  └─ test.sh  / test.ps1           # run tests
-├─ src/
-│  ├─ domain/
-│  │  └─ Settings.hpp
-│  ├─ application/
-│  │  ├─ ports/
-│  │  │  ├─ IConfigProvider.hpp
-│  │  │  ├─ ILogger.hpp
-│  │  │  ├─ IHook.hpp
-│  │  │  ├─ IKoreLink.hpp
-│  │  │  └─ IFrameCodec.hpp         # keep as extension point (noop impl in infra)
-│  │  └─ services/
-│  │     ├─ BridgeService.hpp
-│  │     └─ BridgeService.cpp
-│  ├─ infrastructure/
-│  │  ├─ config/
-│  │  │  ├─ Config_Toml.hpp
-│  │  │  └─ Config_Toml.cpp
-│  │  ├─ logging/
-│  │  │  ├─ Logger_Spdlog.hpp
-│  │  │  └─ Logger_Spdlog.cpp
-│  │  ├─ link/
-│  │  │  ├─ KoreLink_Asio.hpp
-│  │  │  └─ KoreLink_Asio.cpp
-│  │  ├─ hook/
-│  │  │  ├─ Hook_Win32.hpp          
-│  │  │  └─ Hook_Win32.cpp
-│  │  └─ codec/
-│  │     └─ FrameCodec_Noop.hpp     # passthrough framing (placeholder)
-│  └─ adapters/
-│     └─ outbound/
-│        └─ dll/
-│           └─ DllMain.cpp          # DLL entrypoint (composition root)
-└─ tests/
-   ├─ test_config.cpp
-   ├─ test_logger.cpp
-   ├─ test_link_asio.cpp
-   └─ test_bridge_integration.cpp
+src/
+├─ domain/Settings.hpp
+├─ application/
+│  ├─ ports/ (IConfigProvider, ILogger, IHook, IKoreLink, IFrameCodec)
+│  └─ services/BridgeService.{hpp,cpp}
+├─ infrastructure/
+│  ├─ config/Config_Toml.{hpp,cpp}
+│  ├─ logging/Logger_Spdlog.{hpp,cpp}
+│  ├─ link/KoreLink_Asio.{hpp,cpp}
+│  ├─ hook/Hook_Win32.{hpp,cpp}
+│  └─ codec/FrameCodec_Noop.hpp
+└─ adapters/outbound/dll/DllMain.cpp   ← composition root
+tests/
 ```
 
 ---
 
-## ⚙️ Requirements
+## 🧪 Requirements
 
-### Windows
-- **Visual Studio 2022** (Desktop development with C++) or **MSVC Build Tools**
-- **CMake**
-- Recommended: **vcpkg** (for dependency management)
+- **Windows 10/11**
+- **Visual Studio 2022** (or **MSVC Build Tools 2022**)
+- **CMake ≥ 3.26**
+- **vcpkg** (manifest mode)
 
-#### Install vcpkg (Windows)
+**Dependencies (via vcpkg):** `spdlog`, `tomlplusplus`, `boost-filesystem`, `boost-asio`, `gtest`.
+
+---
+
+## 📦 Setup (vcpkg)
+
 ```powershell
-# 1 - Clone vcpkg
-git clone https://github.com/microsoft/vcpkg
+# 1) Clone and bootstrap vcpkg
+git clone https://github.com/microsoft/vcpkg C:\vcpkg
+C:\vcpkg\bootstrap-vcpkg.bat
 
-# 2 - Build vcpkg
-cd vcpkg
-.\bootstrap-vcpkg.bat
+# 2) Set environment
+setx VCPKG_ROOT "C:\vcpkg"
 
-# 3 - Add vcpkg to PATH
-# Replace <path-to-vcpkg> with the folder where you cloned it
-setx PATH "%PATH%;<path-to-vcpkg>"
-
-# 4 - Set VCPKG_ROOT (same folder as above)
-setx VCPKG_ROOT "<path-to-vcpkg>"
-
-# ⚠️ Close and reopen your terminal for the new PATH and VCPKG_ROOT to take effect
-
-# 5 - Install dependencies (Manifest mode)
-# At the project root (where vcpkg.json is located), run:
+# 3) From the project root (where vcpkg.json lives)
+#    Install dependencies for 32-bit (matches project default triplet)
 vcpkg install --triplet x86-windows --x-manifest-root=.
 ```
 
@@ -108,72 +137,119 @@ vcpkg install --triplet x86-windows --x-manifest-root=.
 
 ## 🛠️ Build
 
-### Windows (PowerShell)
+### PowerShell (recommended)
 
-#### Using the build script (recommended)
 ```powershell
+# Configure + build
 .\scripts\build.ps1 -Config Debug   # or Release
 ```
 
+This script:
+- Adds the vcpkg toolchain if `VCPKG_ROOT` is found
+- Generates Visual Studio projects
+- Builds the static lib, tests, and `ArkanRelay.dll`
+
+> The project enables **/utf-8** and **colored console logging** by default.
+
 ---
 
-## 🧪 Tests
+## ✅ Tests
 
-Run the tests (GoogleTest via CTest):
-
-```bash
-# Windows (PowerShell)
+```powershell
 .\scripts\test.ps1 -Config Debug
 ```
 
-Filter by name:
-```bash
-ctest --test-dir build -R ConfigToml --output-on-failure
+Filter tests:
+```powershell
+ctest --test-dir build -R KoreLinkAsio --output-on-failure -C Debug
 ```
 
 ---
 
-## ▶️ Run the CLI
+## ⚙️ Configuration (`arkan-relay.toml`)
 
-```bash
-./build/arkan_relay_cli arkan-relay.toml
-# or simply:
-./build/arkan_relay_cli
-# (if the file does not exist, it will be created with defaults)
+```toml
+[general]
+showConsole = true        # also log to a live console (DLL opens it on attach)
+
+[logging]
+dir     = "logs"
+app     = "relay_app.log"
+socket  = "relay_socket.log"
+
+[relay]
+ioThreads = 1
+
+[kore1]
+host = "127.0.0.1"
+port = 6900
+
+[advanced]
+# Absolute function-pointer slot addresses (hex strings).
+# These are required for hook install():
+fnSendAddr     = "0x01234567"   # address of a pointer slot to client send()
+fnRecvAddr     = "0x89ABCDEF"   # address of a pointer slot to client recv()
+# Exported functions used by the seed/checksum logic:
+fnSeedAddr     = "0x00112233"
+fnChecksumAddr = "0x00445566"
+```
+
+### Logging
+- **File logs** rotate at 5 MB, keep 3 files per channel.
+- **Console logs** are colorized by level. Enable/disable via `showConsole`.
+- **DebugView**: messages also go through `OutputDebugString` (MSVC sink).
+
+---
+
+## 🖥️ Console logging (colors)
+
+Console output is colored **per log level** (file logs remain plain). You can raise/lower verbosity at runtime via the `ILogger::set_level(LogLevel)` implementation in `Logger_Spdlog`.
+
+Example:
+```txt
+[2025-07-08 19:35:22.101] [info] Arkan Relay bridge started.
+[2025-07-08 19:35:22.601] [debug] SEND/RECV hooked successfully.
+[2025-07-08 19:35:23.004] [trace] S 48 bytes → Kore
 ```
 
 ---
 
-## 🧩 Configuration (`arkan-relay.toml`)
+## 🧩 Using the DLL
 
-**[general]**
-- `ports` (array of integers): listening ports (e.g., `[6900, 6901, 6902]`).
-- `showConsole` (bool): also output logs to the console.
-- `saveLog` / `saveSocketLog` (bool): write logs to files for app/socket channels.
+- Build `ArkanRelay.dll`.
+- Ensure `arkan-relay.toml` is accessible (same folder as the client or a known path).
+- Load the DLL into the RO client process (for research only).
+- On **PROCESS_ATTACH**, the DLL:
+  - Opens a console (if `showConsole=true`)
+  - Loads config, initializes logging
+  - Connects to the configured Kore host/port
+  - Installs the Windows hook
+  - Starts bridging traffic
 
-**[advanced]** *(optional)*
-- `fnSeedAddr`, `fnChecksumAddr`, `fnSendAddr`, `fnRecvAddr`: hexadecimal addresses as strings (e.g., `"0x1234ABCD"`). Leave empty if unused.
+Stopping:
+- Unload the DLL to trigger a graceful shutdown (the hook is uninstalled and links are closed).
 
-**[logging]**
-- `dir`: log directory (e.g., `"logs"`).
-- `app`: application log filename.
-- `socket`: socket channel log filename.
+> The repository **does not** include an injector. Loading the DLL is left to your lab setup.
 
-> **Log rotation:** 5 MB per file, 3 files per channel (see `Logger_Spdlog.cpp`).
+---
 
+## 🛡️ Safety & Scope
 
-## 💡 VS Code tips
+- Designed for **closed, controlled** environments only.
+- Avoids invasive modifications by constraining checksum adjustments to explicitly detected flows.
+- Uses RAII and minimal state to keep the hook reversible and testable.
 
-- Extensions: **CMake Tools** and **C/C++** (ms-vscode.cpptools).
-- Ensure IntelliSense uses `compile_commands.json`:
-  ```json
-  {
-    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
-    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
-    "C_Cpp.default.cppStandard": "c++20"
-  }
-  ```
-- If you see false red squiggles on includes, reconfigure/clean:
-  ```bash
-  rm -rf build && ./scripts/build.sh
-  ```
+---
+
+## 📜 License
+
+MIT — see `LICENSE`.
+
+---
+
+## 🙌 Acknowledgements
+
+- [OpenKore](https://github.com/OpenKore/openkore) community
+- spdlog, Boost, GoogleTest, toml++
+- Microsoft vcpkg team
+
