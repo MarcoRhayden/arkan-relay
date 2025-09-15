@@ -1,19 +1,32 @@
+# ==========================
+# Build artifacts
+# ==========================
 /build*/
 /build32/
 /dist_x86
-/.cache/
-/.vs/
-CMakeFiles/
-CMakeCache.txt
-*.user
-*.log
-*.pdb
-*.ipch
+/CMakeFiles/
+/CMakeCache.txt
+/vcpkg_installed/
+
+# ==========================
+# IDE / Editor files
+# ==========================
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
 !.vscode/CMakePresets.json
 !.vscode/tasks.json
+/.vs/
 
-# vcpkg build artifacts
-vcpkg_installed/
+# ==========================
+# Cache / Temporary files
+# ==========================
+/.cache/
+
+# ==========================
+# Debug / Logs
+# ==========================
+*.log
+*.pdb
+*.ipch
+*.user
