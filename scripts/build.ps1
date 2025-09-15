@@ -2,11 +2,22 @@ Param(
   [string]$Config   = "Debug",
   [string]$BuildDir = "build",
   [string]$Generator = "Visual Studio 17 2022",
-  [string]$Triplet  = "x86-windows"
+  [string]$Triplet  = ""
 )
 
 $ErrorActionPreference = 'Stop'
 $extraArgs = @('-DCMAKE_EXPORT_COMPILE_COMMANDS=ON')
+
+# Default triplet logic:
+# - For Release builds: force static
+# - For Debug builds: allow user override
+if (-not $Triplet -or $Triplet -eq "") {
+  if ($Config -eq "Release") {
+    $Triplet = "x86-windows-static"
+  } else {
+    $Triplet = "x86-windows"
+  }
+}
 
 # Check cmake
 if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
@@ -49,4 +60,4 @@ if ($arch -ne "") {
 Write-Host ("Building ({0})..." -f $Config)
 & cmake --build $buildPath --config $Config
 
-Write-Host ("Build completed in '{0}' (config: {1})" -f $buildPath, $Config)
+Write-Host ("Build completed in '{0}' (config: {1}, triplet: {2})" -f $buildPath, $Config, $Triplet)

@@ -1,5 +1,6 @@
-/build/
+/build*/
 /build32/
+/dist_x86
 /.cache/
 /.vs/
 CMakeFiles/
