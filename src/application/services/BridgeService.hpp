@@ -4,7 +4,7 @@
 #include "application/ports/IKoreLink.hpp"
 #include "application/ports/ILogger.hpp"
 #include "domain/Settings.hpp"
-#include "shared/utils/HexDump.hpp"
+#include "shared/hex/Hex.hpp"
 
 namespace arkan::relay::application::services
 {

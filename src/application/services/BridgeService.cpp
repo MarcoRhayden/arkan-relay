@@ -18,7 +18,7 @@ void BridgeService::start()
     // 'S' frame: client sent data; forward to Kore
 
     // Console-friendly summary
-    log_.sock(LogLevel::info, "SEND → " + shared::utils::hex_dump(b));
+    log_.sock(LogLevel::info, "SEND → " + shared::hex::hex_dump(b));
 
     // Forward to Kore as 'S' frame
     // link_.send_frame('S', b);
@@ -29,7 +29,7 @@ void BridgeService::start()
     // 'R' frame: client received data; forward to Kore
 
     // Console-friendly summary
-    log_.sock(LogLevel::info, "RECV ← " + shared::utils::hex_dump(b));
+    log_.sock(LogLevel::info, "RECV ← " + shared::hex::hex_dump(b));
 
     // Forward to Kore as 'R' frame
     // link_.send_frame('R', b);

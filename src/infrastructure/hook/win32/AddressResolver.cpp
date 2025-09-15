@@ -76,17 +76,6 @@ const char* AddressResolver::state_to_str(unsigned long s)
   return "UNKNOWN";
 }
 
-std::string AddressResolver::to_hex_ptr(uintptr_t v)
-{
-  char b[32];
-#if defined(_MSC_VER)
-  std::snprintf(b, sizeof(b), "0x%08lX", static_cast<unsigned long>(v));
-#else
-  std::snprintf(b, sizeof(b), "0x%lX", static_cast<unsigned long>(v));
-#endif
-  return std::string(b);
-}
-
 void AddressResolver::log_pages(arkan::relay::application::ports::ILogger& log,
                                 const ResolvedAddrs& addrs)
 {
