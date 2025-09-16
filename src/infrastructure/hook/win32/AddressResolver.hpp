@@ -30,7 +30,6 @@ class AddressResolver
   static uintptr_t ensure_absolute_or_offset(uintptr_t addr);
   static const char* protect_to_str(unsigned long p);
   static const char* state_to_str(unsigned long s);
-  static std::string to_hex_ptr(uintptr_t v);
 };
 
 }  // namespace arkan::relay::infrastructure::win32

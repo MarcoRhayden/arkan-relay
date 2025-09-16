@@ -1,33 +1,33 @@
 #pragma once
-#include "application/ports/ILogger.hpp"
-#include "domain/Settings.hpp"
-
 #include <spdlog/spdlog.h>
 
 #include <memory>
 #include <string>
 #include <string_view>
 
-namespace arkan::relay::infrastructure::logging {
+#include "application/ports/ILogger.hpp"
+#include "domain/Settings.hpp"
 
-  class Logger_Spdlog final : public arkan::relay::application::ports::ILogger {
-    public:
-      void init(const arkan::relay::domain::Settings& s) override;
+namespace arkan::relay::infrastructure::logging
+{
 
-      void app(arkan::relay::application::ports::LogLevel level,
-              const std::string& msg) override;
+class Logger_Spdlog final : public arkan::relay::application::ports::ILogger
+{
+ public:
+  void init(const arkan::relay::domain::Settings& s) override;
 
-      void sock(arkan::relay::application::ports::LogLevel level,
-                std::string_view msg) override;
+  void app(arkan::relay::application::ports::LogLevel level, const std::string& msg) override;
 
-      void set_level(arkan::relay::application::ports::LogLevel level);
+  void sock(arkan::relay::application::ports::LogLevel level, std::string_view msg) override;
 
-    private:
-      std::shared_ptr<spdlog::logger> app_;
-      std::shared_ptr<spdlog::logger> sock_;
+  void set_level(arkan::relay::application::ports::LogLevel level);
 
-      // Helpers
-      static spdlog::level::level_enum map_level(arkan::relay::application::ports::LogLevel l);
-  };
+ private:
+  std::shared_ptr<spdlog::logger> app_;
+  std::shared_ptr<spdlog::logger> sock_;
 
-} // namespace arkan::relay::infrastructure::logging
+  // Helpers
+  static spdlog::level::level_enum map_level(arkan::relay::application::ports::LogLevel l);
+};
+
+}  // namespace arkan::relay::infrastructure::logging

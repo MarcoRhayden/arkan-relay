@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <string>
 
+#include "shared/hex/Hex.hpp"
+
 using arkan::relay::application::ports::LogLevel;
 
 namespace arkan::relay::infrastructure::win32
@@ -85,7 +87,8 @@ void AddressResolver::log_pages(arkan::relay::application::ports::ILogger& log,
     MEMORY_BASIC_INFORMATION mbi{};
     if (::VirtualQuery(reinterpret_cast<LPCVOID>(addr), &mbi, sizeof(mbi)) == sizeof(mbi))
     {
-      std::string msg = std::string("Addr '") + name + "' @ " + to_hex_ptr(addr) + " page={" +
+      std::string msg = std::string("Addr '") + name + "' @ " +
+                        arkan::relay::shared::hex::to_hex_ptr(addr) + " page={" +
                         state_to_str(mbi.State) + "," + protect_to_str(mbi.Protect) + "}";
       log.app(LogLevel::debug, msg);
     }

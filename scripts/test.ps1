@@ -1,8 +1,8 @@
 Param(
-  [string]$Config   = "Debug",
+  [string]$Config = "Debug",
   [string]$BuildDir = "build",
   [string]$Generator = "Visual Studio 17 2022",
-  [string]$Triplet  = "x86-windows"
+  [string]$Triplet = "x86-windows"
 )
 
 $ErrorActionPreference = "Stop"

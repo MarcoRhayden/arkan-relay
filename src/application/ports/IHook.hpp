@@ -1,24 +1,26 @@
 #pragma once
+#include <cstddef>
 #include <functional>
 #include <span>
-#include <cstddef>
 
-namespace arkan::relay::application::ports {
+namespace arkan::relay::application::ports
+{
 
-  // Windows hook port. BridgeService
-  // Implementation (Hook_Win32) calls these callbacks when intercepting send/recv.
-  struct IHook {
-    using Bytes = std::span<const std::byte>;
+// Windows hook port. BridgeService
+// Implementation (Hook_Win32) calls these callbacks when intercepting send/recv.
+struct IHook
+{
+  using Bytes = std::span<const std::byte>;
 
-    virtual ~IHook() = default;
+  virtual ~IHook() = default;
 
-    // Lifecycle
-    virtual bool install() = 0;
-    virtual void uninstall() = 0;
+  // Lifecycle
+  virtual bool install() = 0;
+  virtual void uninstall() = 0;
 
-    // Callbacks (filled by BridgeService)
-    std::function<void(Bytes)> on_send;
-    std::function<void(Bytes)> on_recv;
-  };
+  // Callbacks (filled by BridgeService)
+  std::function<void(Bytes)> on_send;
+  std::function<void(Bytes)> on_recv;
+};
 
-} // namespace arkan::relay::application::ports
+}  // namespace arkan::relay::application::ports
