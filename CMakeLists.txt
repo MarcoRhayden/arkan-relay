@@ -77,8 +77,12 @@ target_include_directories(arkan_relay_application INTERFACE src)
 target_link_libraries(arkan_relay_application INTERFACE arkan_relay_domain)
 
 set(INFRA_COMMON
+  # shared
+  src/shared/hex/Hex.hpp
+
   # domain
   src/domain/Settings.hpp
+  src/domain/protocol/Opcodes.hpp
 
   # application (service)
   src/application/services/BridgeService.hpp
