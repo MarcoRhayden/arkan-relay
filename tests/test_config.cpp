@@ -1,24 +1,28 @@
-#include "infrastructure/config/Config_Toml.hpp"
-#include "domain/Settings.hpp"
-#include <filesystem>
 #include <gtest/gtest.h>
+
+#include <filesystem>
 #include <fstream>
 
-using arkan::relay::infrastructure::config::Config_Toml;
+#include "domain/Settings.hpp"
+#include "infrastructure/config/Config_Toml.hpp"
+
 using arkan::relay::domain::Settings;
+using arkan::relay::infrastructure::config::Config_Toml;
 namespace fs = std::filesystem;
 
-static fs::path tmp_file(const std::string& name) {
+static fs::path tmp_file(const std::string& name)
+{
   auto dir = fs::temp_directory_path() / "arkan-relay-tests";
   fs::create_directories(dir);
   return dir / name;
 }
 
-TEST(ConfigToml, CreatesWithDefaultsWhenMissing) {
+TEST(ConfigToml, CreatesWithDefaultsWhenMissing)
+{
   auto cfg = tmp_file("missing.toml");
   if (fs::exists(cfg)) fs::remove(cfg);
 
-  Config_Toml impl;                               
+  Config_Toml impl;
   Settings s = impl.load_or_create(cfg.string());
 
   EXPECT_TRUE(fs::exists(cfg));
@@ -28,7 +32,8 @@ TEST(ConfigToml, CreatesWithDefaultsWhenMissing) {
   EXPECT_FALSE(s.logsDir.empty());
 }
 
-TEST(ConfigToml, ReadsCustomValues) {
+TEST(ConfigToml, ReadsCustomValues)
+{
   auto cfg = tmp_file("custom.toml");
   {
     std::ofstream out(cfg.string());
@@ -50,7 +55,8 @@ TEST(ConfigToml, ReadsCustomValues) {
   EXPECT_EQ(s.socketLogFilename, "s.log");
 }
 
-TEST(ConfigToml, FallbackWhenSectionMissing) {
+TEST(ConfigToml, FallbackWhenSectionMissing)
+{
   auto cfg = tmp_file("no-logging.toml");
   {
     std::ofstream out(cfg.string());
