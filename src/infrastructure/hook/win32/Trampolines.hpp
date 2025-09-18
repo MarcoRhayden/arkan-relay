@@ -23,7 +23,7 @@
 
 namespace arkan::relay::application::ports
 {
-struct IHook;  // forward declaration (avoids cross-include)
+struct IHook;
 }
 
 namespace arkan::relay::infrastructure::win32
@@ -32,9 +32,8 @@ namespace arkan::relay::infrastructure::win32
 // Shared state between trampolines/hook
 struct TrampState
 {
-  // __cdecl; checksum receives seed64 (high<<32 | low)
-  using seed64_fp = unsigned long long(__cdecl*)(const BYTE*, UINT);
-  using csum_fp = BYTE(__cdecl*)(const BYTE*, UINT, UINT, unsigned long long);
+  using seed64_fp = unsigned long long(__cdecl*)(BYTE*, UINT);
+  using csum_fp = BYTE(__cdecl*)(BYTE*, UINT, UINT, unsigned long long);
 
   seed64_fp seed_fp = nullptr;
   csum_fp checksum_fp = nullptr;
@@ -45,12 +44,23 @@ struct TrampState
   std::atomic<uint32_t> high{0}, low{0};
   std::atomic<int> counter{0};
   std::atomic<bool> found1c0b{false};
+
   std::mutex send_mtx;
+
+  std::atomic<SOCKET> last_socket{INVALID_SOCKET};
+
+  inline void reset_all_relaxed() noexcept
+  {
+    counter.store(0, std::memory_order_relaxed);
+    found1c0b.store(false, std::memory_order_relaxed);
+    low.store(0, std::memory_order_relaxed);
+    high.store(0, std::memory_order_relaxed);
+  }
 
   arkan::relay::application::ports::IHook* owner = nullptr;
 };
 
-// Trampolines (implemented in Trampolines.cpp)
+// Trampolines
 struct Trampolines
 {
   static inline TrampState* S = nullptr;
@@ -59,10 +69,6 @@ struct Trampolines
   {
     S = s;
   }
-
-  static BYTE call_seed(const BYTE* data, size_t len);
-  static BYTE call_checksum(const BYTE* data, size_t len, uint32_t counter, uint32_t low,
-                            uint32_t high);
 
   static int WSAAPI send(SOCKET s, const char* buf, int len, int flags);
   static int WSAAPI recv(SOCKET s, char* buf, int len, int flags);
