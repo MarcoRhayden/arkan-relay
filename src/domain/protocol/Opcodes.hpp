@@ -1,4 +1,5 @@
 #pragma once
+
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -26,13 +27,13 @@ struct Opcode2
   }
 };
 
-// ---- Canonical opcodes (nomeie pelo significado do domínio) ----
-// Handshake / counters
+// ---- Canonical opcodes ----
 inline constexpr Opcode2 C7_0A{0xC7, 0x0A};   // resets counter
 inline constexpr Opcode2 C7_0B{0xC7, 0x0B};   // drop/keepalive handling
 inline constexpr Opcode2 B3_00{0xB3, 0x00};   // reset counter + clear flags
 inline constexpr Opcode2 _26_0C{0x26, 0x0C};  // session/init boundary
 inline constexpr Opcode2 _1C_0B{0x1C, 0x0B};  // special trigger
+// inline constexpr Opcode2 _0B_1C{0x0B, 0x1C};  // special trigger / reset checksum
 
 // Conveniences
 constexpr bool is(std::span<const uint8_t> buf, Opcode2 op) noexcept
