@@ -106,7 +106,9 @@
         "resumable": "cpp",
         "memory_resource": "cpp",
         "numeric": "cpp",
-        "stdfloat": "cpp"
+        "stdfloat": "cpp",
+        "random": "cpp",
+        "*.backup": "cpp"
     },
     "cmake.configureOnOpen": false,
     "cmake.configureOnEdit": false,
