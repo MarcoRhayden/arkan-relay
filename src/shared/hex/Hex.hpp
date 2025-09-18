@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <iomanip>
@@ -8,67 +9,46 @@
 #include <string>
 #include <type_traits>
 
+#if defined(min)
+#undef min
+#endif
+#if defined(max)
+#undef max
+#endif
+
 namespace arkan::relay::shared::hex
 {
 
-// ----------------------------------------------------------------------------------------------
-// Architecture-dependent pointer width (hex digits)
-// ----------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// hexadecimal width for pointers
+// -----------------------------------------------------------------------------
 constexpr int ptr_width = (sizeof(uintptr_t) == 4) ? 8 : (sizeof(uintptr_t) == 8) ? 16 : 8;
 
-// ----------------------------------------------------------------------------------------------
-// to_hex(value, width)
-// - Formats an unsigned integer to "0x" prefixed, uppercase hex, zero-padded.
-// - Default width = sizeof(UInt) * 2 if not provided.
-// ----------------------------------------------------------------------------------------------
-template <class UInt, typename = std::enable_if_t<std::is_unsigned_v<UInt>>>
-inline std::string to_hex(UInt value, int width = -1)
-{
-  if (width < 0) width = static_cast<int>(sizeof(UInt) * 2);
-  std::ostringstream oss;
-  oss << "0x" << std::uppercase << std::hex << std::setw(width) << std::setfill('0')
-      << static_cast<unsigned long long>(value);
-  return oss.str();
-}
-
-// ----------------------------------------------------------------------------------------------
-// to_hex_ptr(p)
-// - Formats a pointer-sized integer using architecture-specific width.
-// ----------------------------------------------------------------------------------------------
-inline std::string to_hex_ptr(uintptr_t p)
-{
-  std::ostringstream oss;
-  oss << "0x" << std::uppercase << std::hex << std::setw(ptr_width) << std::setfill('0')
-      << static_cast<unsigned long long>(p);
-  return oss.str();
-}
-
-// ----------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // hex_dump(data, max_len)
-// - Compact one-line hex dump with space-separated bytes.
-// - Truncates after max_len bytes and appends "...(N bytes total)".
-// - Accepts std::span<std::byte>; overloads provided for common byte views.
-// ----------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 inline std::string hex_dump(std::span<const std::byte> data, size_t max_len = 64)
 {
   std::ostringstream oss;
   oss << std::hex << std::uppercase << std::setfill('0');
 
-  size_t count = 0;
-  for (auto b : data)
+  const size_t take = (max_len > 0) ? (std::min)(max_len, data.size()) : data.size();
+
+  for (size_t i = 0; i < take; ++i)
   {
-    const auto v = static_cast<unsigned int>(std::to_integer<unsigned char>(b));
+    const auto v = static_cast<unsigned int>(std::to_integer<unsigned char>(data[i]));
     oss << std::setw(2) << v << ' ';
-    if (++count >= max_len)
-    {
-      oss << "...(" << data.size() << " bytes total)";
-      break;
-    }
   }
+
+  if (take < data.size())
+  {
+    oss << "...(" << data.size() << " bytes total)";
+  }
+
   return oss.str();
 }
 
-// Convenience overloads (no copies):
+// Overloads
 inline std::string hex_dump(const uint8_t* data, size_t len, size_t max_len = 64)
 {
   return hex_dump(std::span<const std::byte>(reinterpret_cast<const std::byte*>(data), len),
@@ -79,6 +59,45 @@ inline std::string hex_dump(const char* data, size_t len, size_t max_len = 64)
 {
   return hex_dump(std::span<const std::byte>(reinterpret_cast<const std::byte*>(data), len),
                   max_len);
+}
+
+// -----------------------------------------------------------------------------
+// to_hex(value, width)
+// -----------------------------------------------------------------------------
+template <class UInt>
+inline std::string to_hex(UInt value, int width = -1)
+{
+  static_assert(std::is_unsigned<UInt>::value, "to_hex requires an unsigned integer type");
+
+  if (width < 0) width = static_cast<int>(sizeof(UInt) * 2);
+
+  std::ostringstream oss;
+  oss << "0x" << std::uppercase << std::hex << std::setw(width) << std::setfill('0')
+      << static_cast<unsigned long long>(value);
+  return oss.str();
+}
+
+// -----------------------------------------------------------------------------
+// to_hex_ptr(p)
+// -----------------------------------------------------------------------------
+inline std::string to_hex_ptr(uintptr_t p)
+{
+  std::ostringstream oss;
+  oss << "0x" << std::uppercase << std::hex << std::setw(ptr_width) << std::setfill('0')
+      << static_cast<unsigned long long>(p);
+  return oss.str();
+}
+
+// -----------------------------------------------------------------------------
+// make_line(tag, span, max)
+// -----------------------------------------------------------------------------
+inline std::string make_line(const char* tag, std::span<const std::byte> sp, size_t max = 32)
+{
+  std::string line;
+  line.reserve(64 + max * 3);
+  line.append(tag).append(" n=").append(std::to_string(sp.size())).append(": ");
+  line += hex_dump(sp, max);
+  return line;
 }
 
 }  // namespace arkan::relay::shared::hex
