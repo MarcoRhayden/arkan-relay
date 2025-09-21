@@ -48,17 +48,20 @@ inline std::string hex_dump(std::span<const std::byte> data, size_t max_len = 64
   return oss.str();
 }
 
-// Overloads
-inline std::string hex_dump(const uint8_t* data, size_t len, size_t max_len = 64)
+// overload for const std::byte* (handy when calling with vector<std::byte>.data())
+inline std::string hex_dump(const std::byte* data, size_t len, size_t max_len = 64)
 {
-  return hex_dump(std::span<const std::byte>(reinterpret_cast<const std::byte*>(data), len),
-                  max_len);
+  return hex_dump(std::span<const std::byte>(data, len), max_len);
 }
 
-inline std::string hex_dump(const char* data, size_t len, size_t max_len = 64)
+// template overload for spans of any trivially-copyable element type that is NOT std::byte
+template <typename T, typename = std::enable_if_t<!std::is_same_v<std::remove_cv_t<T>, std::byte>>>
+inline std::string hex_dump(std::span<const T> data, size_t max_len = 64)
 {
-  return hex_dump(std::span<const std::byte>(reinterpret_cast<const std::byte*>(data), len),
-                  max_len);
+  // reinterpret the span<T> as bytes: pointer cast + multiply length by sizeof(T)
+  auto ptr = reinterpret_cast<const std::byte*>(data.data());
+  const size_t len_bytes = data.size() * sizeof(T);
+  return hex_dump(std::span<const std::byte>(ptr, len_bytes), max_len);
 }
 
 // -----------------------------------------------------------------------------
