@@ -174,12 +174,6 @@ ctest --test-dir build -R KoreLinkAsio --output-on-failure -C Debug
 ## ⚙️ Configuration (`arkan-relay.toml`)
 
 ```toml
-[advanced]
-fnSeedAddr     = "0x5A1B2C3D"
-fnChecksumAddr = "0x004010F0"
-fnSendAddr     = "0x00ABCDEF"
-fnRecvAddr     = "0x00ABCD01"
-
 [logging]
 showConsole     = true
 saveLog         = true
