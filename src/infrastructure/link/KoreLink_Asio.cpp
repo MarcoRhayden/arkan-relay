@@ -7,6 +7,8 @@
 #include <windows.h>
 #endif
 
+#include "infrastructure/win32/PortClaim.hpp"
+
 using arkan::relay::infrastructure::link::KoreLink_Asio;
 
 namespace arkan::relay::infrastructure::link
@@ -137,6 +139,9 @@ void KoreLink_Asio::close()
                       closing_ = true;
                       connected_ = false;
 
+                      // release claim if any
+                      port_claim_.release();
+
                       ping_timer_.cancel();
                       reconn_timer_.cancel();
                       resolver_.cancel();
@@ -159,19 +164,87 @@ uint16_t KoreLink_Asio::current_port_nolock() const
   return single_port_;
 }
 
+// Attempt to claim an available port
+bool KoreLink_Asio::claim_port_for_connect(uint16_t& out_port)
+{
+  std::vector<uint16_t> try_ports;
+  if (!candidate_ports_.empty())
+  {
+    const size_t n = candidate_ports_.size();
+    for (size_t i = 0; i < n; ++i)
+    {
+      try_ports.push_back(candidate_ports_[(port_idx_ + i) % n]);
+    }
+  }
+  else
+  {
+    if (single_port_ == 0) return false;
+    try_ports.push_back(single_port_);
+  }
+
+  for (uint16_t p : try_ports)
+  {
+    // release any previous claim in this process before trying
+    port_claim_.release();
+
+    if (port_claim_.claim(host_, p))
+    {
+      // succeeded: set index (if applicable) so round-robin resumes from this port
+      if (!candidate_ports_.empty())
+      {
+        auto it = std::find(candidate_ports_.begin(), candidate_ports_.end(), p);
+        if (it != candidate_ports_.end())
+          port_idx_ = static_cast<std::size_t>(std::distance(candidate_ports_.begin(), it));
+        else
+          port_idx_ = 0;
+      }
+      else
+      {
+        port_idx_ = 0;
+      }
+
+      out_port = p;
+      char b[256];
+      std::snprintf(b, sizeof(b), "[KoreLink] port claim acquired for %s:%u (name=%s)\n",
+                    host_.c_str(), (unsigned)p, port_claim_.claimed_name().c_str());
+      log_.sock(arkan::relay::application::ports::LogLevel::debug, b);
+      return true;
+    }
+    // failed to claim p -> try next
+  }
+
+  // none claimable
+  char b[256];
+  std::snprintf(b, sizeof(b), "[KoreLink] no candidate port could be claimed for host=%s\n",
+                host_.c_str());
+  log_.sock(arkan::relay::application::ports::LogLevel::warn, b);
+  return false;
+}
+
 // -------------------- connect/read/write --------------------
 void KoreLink_Asio::start_connect()
 {
   if (closing_) return;
 
-  const auto port = current_port_nolock();
+  // pick & claim a port before attempting DNS/connection
+  uint16_t chosen_port = 0;
+  if (!claim_port_for_connect(chosen_port))
+  {
+    // nothing claimable now — schedule reconnect/backoff so we try again later
+    schedule_reconnect();
+    return;
+  }
 
+  // chosen_port now holds the port we will resolve/connect to
   resolver_.async_resolve(
-      host_, std::to_string(port),
-      [this, port](const boost::system::error_code& ec, tcp::resolver::results_type results)
+      host_, std::to_string(chosen_port),
+      [this, port = chosen_port](const boost::system::error_code& ec,
+                                 tcp::resolver::results_type results)
       {
         if (ec)
         {
+          // release claim so others can use it if resolve fails
+          port_claim_.release();
           schedule_reconnect();
           return;
         }
@@ -182,6 +255,8 @@ void KoreLink_Asio::start_connect()
             {
               if (ec2)
               {
+                // connection failed -> release claim and reconnect
+                port_claim_.release();
                 schedule_reconnect();
                 return;
               }
@@ -204,6 +279,9 @@ void KoreLink_Asio::schedule_reconnect()
 {
   connected_ = false;
   if (closing_) return;
+
+  // release claim so others can use the port while we backoff
+  port_claim_.release();
 
   // close socket
   boost::system::error_code ec;

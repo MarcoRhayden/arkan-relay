@@ -85,6 +85,8 @@ class Hook_Win32 : public ports::IHook
   // constants
   static constexpr uint8_t DEFAULT_CHECKSUM_BYTE = 0x69u;
   static constexpr size_t HEX_DUMP_LIMIT = 64;
+  // spacing between injected sends
+  static constexpr std::chrono::milliseconds INJECT_SPACING_MS{33};
 
   // Drain pending injected sends using Trampolines::send
   void drain_injected_sends_();

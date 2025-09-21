@@ -15,6 +15,7 @@
 
 #include "application/ports/IKoreLink.hpp"
 #include "application/ports/ILogger.hpp"
+#include "infrastructure/win32/PortClaim.hpp"
 
 namespace arkan::relay::infrastructure::link
 {
@@ -52,6 +53,11 @@ class KoreLink_Asio final : public arkan::relay::application::ports::IKoreLink
   static std::array<std::byte, 3> make_header(char kind, std::size_t len);
   static uint16_t le16(std::byte lo, std::byte hi);
   uint16_t current_port_nolock() const;
+
+  // PortClaim instance (Win32)
+  arkan::relay::infrastructure::PortClaim port_claim_;
+  // tries to claim an available port (runs on strand)
+  bool claim_port_for_connect(uint16_t& out_port);
 
   // Log
   application::ports::ILogger& log_;

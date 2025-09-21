@@ -97,12 +97,12 @@ set(INFRA_COMMON
   src/application/services/protocol/ChecksumState.hpp
   src/application/services/protocol/ProtocolScanner.hpp
   src/application/services/protocol/ProtocolScanner_Coalesced.cpp
-  src/application/ports/IChecksumService.hpp           # se existir
-  src/application/services/protocol/ChecksumService.hpp            # se existir
+  src/application/ports/IChecksumService.hpp           
+  src/application/services/protocol/ChecksumService.hpp            
   src/application/services/protocol/ChecksumService_Callback.hpp
   src/application/services/protocol/ChecksumService_Callback.cpp
 
-  # infrastructure - config/logging/link/codec
+  # infrastructure
   src/infrastructure/config/Config_Toml.hpp
   src/infrastructure/config/Config_Toml.cpp
 
@@ -119,6 +119,10 @@ set(INFRA_COMMON
   src/infrastructure/net/RecvPipeline.cpp
   src/infrastructure/net/SendPipeline.hpp
   src/infrastructure/net/SendPipeline.cpp
+
+   # infrastructure - port claim
+  src/infrastructure/win32/PortClaim.hpp
+  src/infrastructure/win32/PortClaim.cpp
 )
 
 # -----------------------------------------------------------------------------
@@ -181,7 +185,7 @@ if(WIN32)
 endif()
 
 # -----------------------------------------------------------------------------
-# spdlog header-only vs compiled (mantém comportamento anterior)
+# spdlog header-only vs compiled
 # -----------------------------------------------------------------------------
 if(WIN32)
   if(MSVC)

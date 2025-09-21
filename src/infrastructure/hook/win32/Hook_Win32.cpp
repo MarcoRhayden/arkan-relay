@@ -133,7 +133,23 @@ bool Hook_Win32::try_inject_send_internal(Bytes b, bool needs_checksum)
                   reinterpret_cast<const uint8_t*>(b.data()) + b.size());
     m.needs_checksum = needs_checksum;
     m.attempts = 0;
-    m.next_try = std::chrono::steady_clock::time_point::min();  // ready immediately
+
+    // compute spacing: if queue empty -> immediate (time_point::min()),
+    // otherwise schedule after last queued message + INJECT_SPACING_MS
+    if (inj_send_q_.empty())
+    {
+      m.next_try = std::chrono::steady_clock::time_point::min();  // ready now
+    }
+    else
+    {
+      auto last = inj_send_q_.back().next_try;
+      const auto now = std::chrono::steady_clock::now();
+      if (last == std::chrono::steady_clock::time_point::min())
+        last = now;  // last was immediate, treat as now
+      // schedule this message after the last message + spacing
+      m.next_try = last + INJECT_SPACING_MS;
+    }
+
     inj_send_q_.emplace_back(std::move(m));
   }
 
