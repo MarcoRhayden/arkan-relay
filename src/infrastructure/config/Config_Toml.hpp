@@ -3,7 +3,6 @@
 
 #include "application/ports/IConfigProvider.hpp"
 
-// forward-declare
 namespace boost
 {
 namespace filesystem

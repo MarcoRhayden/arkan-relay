@@ -174,20 +174,29 @@ ctest --test-dir build -R KoreLinkAsio --output-on-failure -C Debug
 ## ⚙️ Configuration (`arkan-relay.toml`)
 
 ```toml
-[general]
-showConsole = true        # also log to a live console (DLL opens it on attach)
+[advanced]
+fnSeedAddr     = "0x5A1B2C3D"
+fnChecksumAddr = "0x004010F0"
+fnSendAddr     = "0x00ABCDEF"
+fnRecvAddr     = "0x00ABCD01"
 
 [logging]
-dir     = "logs"
-app     = "relay_app.log"
-socket  = "relay_socket.log"
+showConsole     = true
+saveLog         = true
+saveSocketLog   = true
+logsDir         = "logs"
+appLogFilename  = "relay_app.log"
+socketLogFilename = "relay_socket.log"
 
-[relay]
-ioThreads = 1
+[kore]
+host  = "127.0.0.1"
+ports = [5293, 5294, 5295]
 
-[kore1]
-host = "127.0.0.1"
-port = 6900
+[kore.reconnect]
+initial_ms = 500        # first break
+max_ms     = 30000      # roof
+backoff    = 2.0        # multiplier
+jitter_p   = 0.2        # 20% jitter
 
 [advanced]
 # Absolute function-pointer slot addresses (hex strings).
