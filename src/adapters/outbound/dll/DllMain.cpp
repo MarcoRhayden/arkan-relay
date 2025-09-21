@@ -201,7 +201,7 @@ static DWORD RunRelayCore()
 
   // --- Infrastructure ---
   logger.app(application::ports::LogLevel::debug, "Creating link/codec/hook...");
-  infrastructure::link::KoreLink_Asio link(logger, s);
+  infrastructure::link::KoreLink_Asio link(logger);
   infrastructure::codec::FrameCodec_Noop codec;
   infrastructure::hook::Hook_Win32 hook(logger, s);
 
