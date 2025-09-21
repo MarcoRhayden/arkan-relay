@@ -4,12 +4,14 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
+#include <atomic>
 #include <cstddef>
 #include <mutex>
 #include <span>
 #include <string>
 #include <vector>
 
+#include "application/ports/IHook.hpp"
 #include "application/services/protocol/ChecksumService_Callback.hpp"
 #include "application/services/protocol/ChecksumState.hpp"
 #include "application/services/protocol/ProtocolScanner.hpp"
@@ -36,9 +38,33 @@ static inline void dbg(const char* m)
 {
   ::OutputDebugStringA(m);
 }
+
 static inline void dbg_str(const std::string& s)
 {
   ::OutputDebugStringA(s.c_str());
+}
+
+// -----------------------------------------------------------------------------------------------
+// File-local atomic pointer to the shared TrampState.
+// - init() stores the pointer (memory_order_release) after the subsystem is ready.
+// - get_state() / is_installed() load with memory_order_acquire.
+// This guarantees a consistent view to other threads.
+// -----------------------------------------------------------------------------------------------
+static std::atomic<TrampState*> g_tramp_state{nullptr};
+
+void Trampolines::init(TrampState* s)
+{
+  g_tramp_state.store(s, std::memory_order_release);
+}
+
+TrampState* Trampolines::get_state()
+{
+  return g_tramp_state.load(std::memory_order_acquire);
+}
+
+bool Trampolines::is_installed()
+{
+  return get_state() != nullptr;
 }
 
 // -----------------------------------------------------------------------------------------------
@@ -90,6 +116,9 @@ static inline void log_hex_buf(const char* tag, const uint8_t* p, size_t n, size
 // -----------------------------------------------------------------------------------------------
 int WSAAPI Trampolines::recv(SOCKET s, char* buf, int len, int flags)
 {
+  TrampState* S = get_state();
+  if (S && S->owner) S->owner->notify_socket(s);
+
   if (!S || !S->original_recv) return SOCKET_ERROR;
 
   // if the socket has changed, it is a new session - clears state
@@ -136,6 +165,12 @@ int WSAAPI Trampolines::recv(SOCKET s, char* buf, int len, int flags)
   int ret = do_recv(buf, len);
   if (ret <= 0) return ret;
 
+  if (S->owner && ret > 0)
+  {
+    std::span<const std::byte> v{reinterpret_cast<const std::byte*>(buf), (size_t)ret};
+    S->owner->emit_recv(v);
+  }
+
   uint8_t* data = reinterpret_cast<uint8_t*>(buf);
   size_t n = static_cast<size_t>(ret);
   log_hex_buf("[RECV] raw       ", data, n);
@@ -171,6 +206,8 @@ int WSAAPI Trampolines::recv(SOCKET s, char* buf, int len, int flags)
 // -----------------------------------------------------------------------------------------------
 int WSAAPI Trampolines::send(SOCKET s, const char* buf, int len, int flags)
 {
+  TrampState* S = get_state();
+  if (S && S->owner) S->owner->notify_socket(s);
   if (!S || !S->original_send) return SOCKET_ERROR;
   if (len <= 0 || !buf) return S->original_send(s, buf, len, flags);
 
@@ -215,8 +252,20 @@ int WSAAPI Trampolines::send(SOCKET s, const char* buf, int len, int flags)
 
   log_hex_buf("[SEND] out       ", data.data(), data.size());
 
+  // emit to Bridge AFTER transform (wire-level)
+  if (!(S->suppress_emit_send.exchange(false, std::memory_order_acq_rel)))
+  {
+    if (S->owner)
+    {
+      std::span<const std::byte> v{reinterpret_cast<const std::byte*>(data.data()), data.size()};
+      S->owner->emit_send(v);
+    }
+  }
+
+  // send to real socket (transformed)
   const int result = S->original_send(s, reinterpret_cast<const char*>(data.data()),
                                       static_cast<int>(data.size()), flags);
+
   if (result == SOCKET_ERROR)
   {
     int e = WSAGetLastError();
