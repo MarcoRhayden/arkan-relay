@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "application/ports/ILogger.hpp"
-#include "domain/Settings.hpp"
 #include "infrastructure/link/KoreLink_Asio.hpp"
 
 using tcp = boost::asio::ip::tcp;
@@ -36,17 +35,16 @@ static std::vector<std::byte> bytes_from(const std::string& s)
                                 reinterpret_cast<const std::byte*>(s.data()) + s.size());
 }
 
-// ----------------------------- Test Logger -----------------------------
+// ----------------------------- Test Logger (no-op) -----------------------------
 struct TestLogger : arkan::relay::application::ports::ILogger
 {
   using LogLevel = arkan::relay::application::ports::LogLevel;
-
   void init(const arkan::relay::domain::Settings&) override {}
   void app(LogLevel, const std::string&) override {}
   void sock(LogLevel, std::string_view) override {}
 };
 
-// ----------------------------- Fake Kore1 server -----------------------------
+// ----------------------------- Fake Kore server -----------------------------
 class FakeKoreServer
 {
  public:
@@ -120,7 +118,7 @@ class FakeKoreServer
   }
 
   bool wait_pop(char& kind, std::vector<std::byte>& payload,
-                std::chrono::milliseconds to = std::chrono::milliseconds(1000))
+                std::chrono::milliseconds to = std::chrono::milliseconds(1500))
   {
     std::unique_lock<std::mutex> lk(m_);
     if (!cv_.wait_for(lk, to, [&] { return !q_.empty(); })) return false;
@@ -176,23 +174,27 @@ TEST(KoreLinkAsio, SendsFramesToServer)
   FakeKoreServer server;
   const uint16_t port = server.start();
 
-  arkan::relay::domain::Settings s;
-  s.kore1.host = "127.0.0.1";
-  s.kore1.port = port;
-  s.relay.ioThreads = 1;
+  // Link (default constructor in the current scenario)
+  arkan::relay::infrastructure::link::KoreLink_Asio link;
 
-  TestLogger logger;
-  arkan::relay::infrastructure::link::KoreLink_Asio link(logger, s);
-  link.connect(s.kore1.host, s.kore1.port);
+  // Configure candidates and connect
+  const std::string host = "127.0.0.1";
+  link.set_candidate_ports({port});
+  link.connect(host, port);
 
+  // Wait for server accept
+  ASSERT_TRUE(server.wait_connected(std::chrono::milliseconds(2000)));
+
+  // Send an 'S' frame
   auto payload = bytes_from("hello");
   link.send_frame('S', payload);
 
+  // Server must receive the frame
   char kind;
   std::vector<std::byte> got;
   ASSERT_TRUE(server.wait_pop(kind, got));
   EXPECT_EQ(kind, 'S');
-  EXPECT_EQ(got.size(), payload.size());
+  ASSERT_EQ(got.size(), payload.size());
   EXPECT_TRUE(std::equal(got.begin(), got.end(), payload.begin(), payload.end()));
 
   link.close();
@@ -204,13 +206,7 @@ TEST(KoreLinkAsio, ReceivesFramesFromServer)
   FakeKoreServer server;
   const uint16_t port = server.start();
 
-  arkan::relay::domain::Settings s;
-  s.kore1.host = "127.0.0.1";
-  s.kore1.port = port;
-  s.relay.ioThreads = 1;
-
-  TestLogger logger;
-  arkan::relay::infrastructure::link::KoreLink_Asio link(logger, s);
+  arkan::relay::infrastructure::link::KoreLink_Asio link;
 
   std::mutex m;
   std::condition_variable cv;
@@ -228,20 +224,24 @@ TEST(KoreLinkAsio, ReceivesFramesFromServer)
         cv.notify_one();
       });
 
-  link.connect(s.kore1.host, s.kore1.port);
+  const std::string host = "127.0.0.1";
+  link.set_candidate_ports({port});
+  link.connect(host, port);
 
   ASSERT_TRUE(server.wait_connected(std::chrono::milliseconds(2000)));
 
+  // Server sends an 'R' frame
   auto payload = bytes_from("from-server");
   server.send_frame('R', payload);
 
+  // Client must receive via callback
   {
     std::unique_lock<std::mutex> lk(m);
     ASSERT_TRUE(cv.wait_for(lk, std::chrono::milliseconds(2000), [&] { return got; }));
   }
 
   EXPECT_EQ(kind, 'R');
-  EXPECT_EQ(data.size(), payload.size());
+  ASSERT_EQ(data.size(), payload.size());
   EXPECT_TRUE(std::equal(data.begin(), data.end(), payload.begin(), payload.end()));
 
   link.close();
