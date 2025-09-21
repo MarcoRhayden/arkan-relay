@@ -146,7 +146,7 @@ bool Hook_Win32::try_inject_recv(Bytes b)
 {
   // inbound emulation not implemented yet
   (void)b;
-  // log_.sock(LogLevel::debug, "try_inject_recv(): stub (inbound emulation not implemented yet)");
+  // (intentionally quiet)
   return true;
 }
 
@@ -166,6 +166,41 @@ void Hook_Win32::notify_socket(SOCKET s)
   // Attempt drain in case messages were waiting for a valid socket
   // (safe to call from notify context)
   drain_injected_sends_();
+}
+
+// -----------------------------------------------------------------------------
+// Helper: requeue_with_backoff
+// Moves 'item' back into inj_send_q_ with retry/backoff bookkeeping.
+// -----------------------------------------------------------------------------
+void Hook_Win32::requeue_with_backoff(InjectMsg item, const char* reason)
+{
+  // increment attempts
+  item.attempts = static_cast<uint8_t>(item.attempts + 1);
+
+  if (item.attempts > MAX_INJECT_ATTEMPTS)
+  {
+    char buf[256];
+    std::snprintf(buf, sizeof(buf), "[INJECT][SEND] dropping after max retries (%s) attempts=%u",
+                  reason, static_cast<unsigned>(item.attempts));
+    log_.sock(LogLevel::warn, buf);
+    return;
+  }
+
+  // compute backoff delay as chrono duration
+  const auto delay = BACKOFF_BASE_MS * static_cast<unsigned>(item.attempts);
+  item.next_try = std::chrono::steady_clock::now() + delay;
+
+  {
+    std::lock_guard<std::mutex> lk(inj_send_mtx_);
+    inj_send_q_.push_front(std::move(item));
+  }
+
+  // log debug with ms
+  const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(delay).count();
+  char lb[256];
+  std::snprintf(lb, sizeof(lb), "[INJECT][SEND] requeued attempts=%u next_in=%lldms (%s)",
+                static_cast<unsigned>(item.attempts), static_cast<long long>(ms), reason);
+  log_.sock(LogLevel::debug, lb);
 }
 
 /* ------------------------ drain / send logic ------------------------ */
@@ -199,10 +234,6 @@ void Hook_Win32::drain_injected_sends_()
     }
     if (batch.empty()) return;  // nothing ready to send now
   }
-
-  // constants for requeue/backoff
-  static constexpr uint8_t MAX_INJECT_ATTEMPTS = 5u;
-  static constexpr int BACKOFF_BASE_MS = 200;  // base backoff (ms) * attempts
 
   for (auto& im : batch)
   {
@@ -250,7 +281,7 @@ void Hook_Win32::drain_injected_sends_()
       char hexb[3 * HEX_DUMP_LIMIT + 64];
       size_t p = 0;
       const size_t take = std::min(HEX_DUMP_LIMIT, to_send.size());
-      for (size_t i = 0; i < take && p + 4 < sizeof(hexb); ++i)
+      for (size_t i = 0; i < take && p + 8 < sizeof(hexb); ++i)
       {
         p += std::snprintf(hexb + p, sizeof(hexb) - p, "%02X ", to_send[i]);
       }
@@ -289,34 +320,15 @@ void Hook_Win32::drain_injected_sends_()
         re.data = std::move(im.data);
         re.needs_checksum = im.needs_checksum;
 
-        // increment attempts and compute next_try/backoff
-        re.attempts = static_cast<uint8_t>(re.attempts + 1);
-        if (re.attempts > MAX_INJECT_ATTEMPTS)
-        {
-          log_.sock(LogLevel::warn, "[INJECT][SEND] dropping after max retries (socket_error)");
-        }
-        else
-        {
-          const int delay_ms = BACKOFF_BASE_MS * static_cast<int>(re.attempts);
-          re.next_try = std::chrono::steady_clock::now() + std::chrono::milliseconds(delay_ms);
-
-          std::lock_guard<std::mutex> lk(inj_send_mtx_);
-          inj_send_q_.push_front(std::move(re));
-
-          char lb[128];
-          std::snprintf(
-              lb, sizeof(lb), "[INJECT][SEND] requeued attempts=%u next_in=%lldms", re.attempts,
-              static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
-                                         re.next_try - std::chrono::steady_clock::now())
-                                         .count()));
-          log_.sock(LogLevel::debug, lb);
-        }
+        // delegate to helper which handles attempts/backoff/drop
+        re.attempts = im.attempts;  // start from original attempts
+        requeue_with_backoff(std::move(re), "socket_error");
       }
       log_.sock(LogLevel::warn, "[INJECT][SEND] send failed -> message requeued");
     }
     else if (static_cast<size_t>(r) < to_send.size())
     {
-      // requeue the original logical message (avoid partial transformations)
+      // partial write: requeue the original logical message (avoid partial transformations)
       char wb[128];
       std::snprintf(wb, sizeof(wb), "[INJECT][SEND] partial write=%d/%zu -> requeued", r,
                     to_send.size());
@@ -325,31 +337,8 @@ void Hook_Win32::drain_injected_sends_()
       InjectMsg re;
       re.data = std::move(im.data);
       re.needs_checksum = im.needs_checksum;
-
-      // increment attempts and compute next_try/backoff
-      re.attempts = static_cast<uint8_t>(re.attempts + 1);
-      if (re.attempts > MAX_INJECT_ATTEMPTS)
-      {
-        log_.sock(LogLevel::warn, "[INJECT][SEND] dropping after max retries (partial)");
-      }
-      else
-      {
-        const int delay_ms = BACKOFF_BASE_MS * static_cast<int>(re.attempts);
-        re.next_try = std::chrono::steady_clock::now() + std::chrono::milliseconds(delay_ms);
-
-        {
-          std::lock_guard<std::mutex> lk(inj_send_mtx_);
-          inj_send_q_.push_front(std::move(re));
-        }
-
-        char lb[128];
-        std::snprintf(lb, sizeof(lb), "[INJECT][SEND] requeued attempts=%u next_in=%lldms",
-                      re.attempts,
-                      static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
-                                                 re.next_try - std::chrono::steady_clock::now())
-                                                 .count()));
-        log_.sock(LogLevel::debug, lb);
-      }
+      re.attempts = im.attempts;
+      requeue_with_backoff(std::move(re), "partial_write");
     }
     else
     {

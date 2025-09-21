@@ -67,6 +67,10 @@ class Hook_Win32 : public ports::IHook
   struct Impl;
   std::unique_ptr<Impl> p_;
 
+  // constants for requeue/backoff
+  static constexpr unsigned MAX_INJECT_ATTEMPTS = 5u;
+  static constexpr std::chrono::milliseconds BACKOFF_BASE_MS{200};  // base backoff (ms) * attempts
+
   // injection queues (Kore -> client)
   static constexpr size_t kDrainBatchMax = 64;
 
@@ -88,6 +92,9 @@ class Hook_Win32 : public ports::IHook
   // internal helper that allows specifying checksum behavior
   // not part of interface; used internally by wrapper
   bool try_inject_send_internal(Bytes b, bool needs_checksum);
+
+  // helper: requeue message with backoff (thread-safe)
+  void requeue_with_backoff(InjectMsg item, const char* reason);
 };
 
 }  // namespace arkan::relay::infrastructure::hook
